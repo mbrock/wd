@@ -235,7 +235,7 @@ wd-new-session() {
     die 1 "neither WEBDRIVER_CAPABILITIES nor WEBDRIVER_BROWSER set"
   fi
   wd-post /session "$(json-obj desiredCapabilities "$capabilities")" |
-    json-get-raw sessionId
+    json-get-raw-nonnull sessionId
 }
 
 wd-assert-session() {
@@ -393,7 +393,9 @@ wd-element-click() { wd-element-simple-action "$1" click; }
 wd-element-clear() { wd-element-simple-action "$1" clear; }
 
 wd-element-send-keys() {
-  wd-element-simple-action "$1" value "$(json-obj text "$(json-str "$*")")"
+  local element
+  element=$1; shift
+  wd-element-simple-action "$element" value "$(json-obj value "$(json-str "$*")")"
 }
 
 wd-execute-script-sync() {
