@@ -93,7 +93,7 @@ main() {
 
     is-element-selected | is-selected)
       wd-is-element-selected "$@" ;;
-    is-element-enabled | enabled)
+    is-element-enabled | is-enabled)
       wd-is-element-enabled "$@" ;;
 
     element-click | click)
@@ -126,7 +126,7 @@ main() {
 
     help)
       print-help ;;
-    
+
     *)
       cat >&2 <<.
 Usage: wd <command> [arguments]
@@ -376,10 +376,11 @@ wd-get-element-css-value() {
   echo "$x"
 }
 
-wd-is-element-selected() { wd-get-element-value "$1" selected; }
 wd-get-element-text() { wd-get-element-value "$1" text; }
 wd-get-element-tag-name() { wd-get-element-value "$1" name; }
-wd-is-element-enabled() { wd-get-element-value "$1" enabled; }
+
+wd-is-element-enabled() { [[ 1 -eq $(wd-get-element-value "$1" enabled) ]]; }
+wd-is-element-selected() { [[ 1 -eq $(wd-get-element-value "$1" selected) ]]; }
 
 wd-element-simple-action() {
   hush wd-post-session /element/"$1"/"$2"
