@@ -29,7 +29,7 @@ set -o pipefail
 shopt -s extglob # extended case patterns
 
 main() {
-  : ${WEBDRIVER_URL:=http://127.0.0.1:4444/wd/hub}
+  : "${WEBDRIVER_URL:=http://127.0.0.1:4444/wd/hub}"
 
   cmd=$1; shift
   case $cmd in
@@ -122,7 +122,7 @@ main() {
     take-screenshot | screenshot)
       wd-take-screenshot ;;
     take-element-screenshot | element-screenshot)
-      wd-take-element-screenshot ;;
+      wd-take-element-screenshot "$@" ;;
 
     help)
       print-help ;;
@@ -138,7 +138,7 @@ Help:  wd help
 }
 
 die() {
-  rc=$1; shift; echo "$0:" "$@" >&2; exit $rc
+  rc=$1; shift; echo "$0:" "$@" >&2; exit "$rc"
 }
 
 json-obj() {
@@ -193,11 +193,12 @@ json-raw() {
       }
     }
     flat $j->decode($s);
-  ' "$@"
+  '
 }
 
 json-raw-nonnull() {
-  local x=$(cat)
+  local x
+  x=$(cat)
   case $x in
     null) false ;;
     *) json-raw <<<"$x" ;;
@@ -249,7 +250,8 @@ wd-get-session() {
 }
 
 wd-checked-result() {
-  local result="$(cat)"
+  local result
+  result=$(cat)
   status="$(json-get status <<<"$result")"
   if [[ $status -ne 0 ]]; then
     die 1 "$(json-get-raw value message <<<"$result")"
@@ -344,7 +346,8 @@ wd-general-element-find() {
   strategy="$(wd-parse-strategy "$1")"
   [[ $? -eq 0 ]] || exit $?
   shift
-  local value="$(json-str "$*")"
+  local value
+  value=$(json-str "$*")
   wd-post-session "$path" "$(json-obj using "$strategy" value "$value")" |
     json-raw
 }
