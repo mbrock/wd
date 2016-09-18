@@ -454,7 +454,7 @@ is a useful pattern.
 
 You must configure desired capabilities by setting either
 
-  - `WEBDRIVER_CAPABILITIES` to a JSON string, or
+  - `WEBDRIVER_CAPABILITIES` to a stringified JSON object, or
   - `WEBDRIVER_BROWSER` to a browser name (`chrome`, `firefox`, etc).
 
 ### `wd delete-session`
