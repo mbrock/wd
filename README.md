@@ -1,19 +1,23 @@
-# wd(1) -- WebDriver command line tool
+# wd -- WebDriver command line tool
 
 `wd` is a simple tool for interacting with servers that implement the
 W3C WebDriver API.
 
-It can be used to write web integration tests as shell scripts or to
-perform web automation tasks.
+It can be used for web automation tasks such as testing and scraping.
 
-See [the spec](https://w3c.github.io/webdriver/webdriver-spec.html)
-for details.
+You can use [Selenium](http://www.seleniumhq.org/) as the WebDriver server
+to control browsers on your own machine.
+
+There are commercial services that offer the WebDriver API remotely; see
+"Functional Test Services" [here](http://www.seleniumhq.org/ecosystem/).
+
+See [the WebDriver spec](https://w3c.github.io/webdriver/webdriver-spec.html)
+for details about the protocol and behavior.
 
 ## Dependencies
 
   - `bash`
-  - `perl` with `JSON::PP` (included since Perl 5.14)
-  - [`jq`](https://github.com/stedolan/jq) (would like to replace with Perl)
+  - `perl` (5.14 or greater)
   - `curl`
 
 ## Example session
@@ -24,6 +28,10 @@ for details.
     $ wd screenshot > /tmp/wd.png
     $ wd click "$(wd find css '.user-mention')"
     $ wd exec 'return document.title'
+
+## Configuration
+
+  - `WEBDRIVER_URL`: WebDriver API URL (default `http://127.0.0.1:4444/wd/hub`)
 
 ## Command reference
 
