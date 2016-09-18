@@ -1,0 +1,578 @@
+#!/usr/bin/env bash
+# wd -- the WebDriver command line interface
+#
+# Copyright 2016 Mikael Brockman
+#
+# Maintainer: <mikael@brockman.se>
+#
+# MIT license:
+#
+# Permission is hereby granted, free of charge, to any person
+# obtaining a copy of this software and associated documentation files
+# (the "Software"), to deal in the Software without restriction,
+# including without limitation the rights to use, copy, modify, merge,
+# publish, distribute, sublicense, and/or sell copies of the Software,
+# and to permit persons to whom the Software is furnished to do so,
+# subject to the following conditions:
+#
+# The above copyright notice and this permission notice shall be
+# included in all copies or substantial portions of the Software.
+#
+# THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
+# EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+# MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
+# NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE
+# LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION
+# OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION
+# WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+
+set -o pipefail
+
+shopt -s extglob # for extended case patterns
+
+main() {
+  : ${WEBDRIVER_URL:=http://0:4444/wd/hub}
+
+  cmd=$1; shift
+  case $cmd in
+    new-session)
+      wd-new-session ;;
+    delete-session)
+      wd-delete-session ;;
+
+    go)
+      wd-go "$@" ;;
+    back)
+      wd-post-session /back ;;
+    forward)
+      wd-post-session /forward ;;
+    refresh)
+      wd-post-session /refresh ;;
+
+    get-current-url)
+      wd-get-current-url ;;
+    get-title)
+      wd-get-title ;;
+    get-page-source | page-source)
+      wd-get-page-source "$@" ;;
+
+    get-window-handle)
+      wd-get-window-handle ;;
+    get-window-handles)
+      wd-get-window-handles ;;
+
+    switch-to-window)
+      wd-switch-to-window "$@" ;;
+    switch-to-frame)
+      wd-switch-to-frame "$@" ;;
+    switch-to-parent-frame)
+      wd-post-session /frame/parent ;;
+
+    get-window-size)
+      wd-get-window-size ;;
+    set-window-size)
+      wd-set-window-size "$@" ;;
+    maximize)
+      wd-maximize ;;
+
+    find-element | find)
+      wd-find-element "$@" ;;
+    find-elements | find-all)
+      wd-find-elements "$@" ;;
+    find-element-in | find-in | find-element-from-element)
+      wd-find-element-from-element "$@" ;;
+    find-elements-in | find-all-in | find-elements-from-element)
+      wd-find-elements-from-element "$@" ;;
+
+    get-element-attribute | attr | attribute)
+      wd-get-element-attribute "$@" ;;
+    get-element-css-value | css-value)
+      wd-get-element-css-value "$@" ;;
+    get-element-text | text)
+      wd-get-element-text "$@" ;;
+    get-element-tag-name | tag-name)
+      wd-get-element-tag-name "$@" ;;
+
+    is-element-selected | is-selected)
+      wd-is-element-selected "$@" ;;
+    is-element-enabled | enabled)
+      wd-is-element-enabled "$@" ;;
+
+    element-click | click)
+      wd-element-click "$@" ;;
+    element-clear | clear)
+      wd-element-clear "$@" ;;
+    element-send-keys | send-keys)
+      wd-element-send-keys "$@" ;;
+
+    execute-script | execute | exec)
+      wd-execute-script-sync "$@" ;;
+    execute-script-async | execute-async | exec-async)
+      wd-execute-script-async "$@" ;;
+
+    get-all-cookies | cookies)
+      wd-get-all-cookies ;;
+    get-named-cookie | cookie)
+      wd-get-named-cookie "$@" ;;
+    add-cookie)
+      wd-add-cookie "$@" ;;
+    delete-cookie)
+      wd-delete-cookie "$@" ;;
+    delete-cookies)
+      wd-delete-cookies ;;
+
+    take-screenshot | screenshot)
+      wd-take-screenshot ;;
+    take-element-screenshot | element-screenshot)
+      wd-take-element-screenshot ;;
+
+    help)
+      cat <<'.'
+# wd(1) -- WebDriver command line tool
+
+## `wd new-session`
+
+Prints the new session ID.
+
+All other commands expect this ID to be in `WEBDRIVER_SESSION`, so
+
+    export WEBDRIVER_SESSION="$(wd new-session)"
+
+is a useful pattern.
+
+You must configure desired capabilities by setting either
+
+  - `WEBDRIVER_CAPABILITIES` to a JSON string, or
+  - `WEBDRIVER_BROWSER` to a browser name (`chrome`, `firefox`, etc).
+
+## `wd delete-session`
+
+Deletes the current session.
+
+## `wd go <url>`
+
+Opens <url> in the current session.
+
+## `wd back`
+## `wd forward`
+## `wd refresh`
+
+## `wd get-current-url`
+## `wd get-title`
+## `wd get-page-source`
+
+## `wd get-window-handle`
+## `wd get-window-handles`
+
+## `wd switch-to-window <window-handle>`
+
+## `wd switch-to-frame <frame-id>`
+
+`<frame-id>` can be either a number or an element ID.
+
+## `wd switch-to-parent-frame`
+
+## `wd get-window-size`
+
+Prints width and height on separate lines.
+
+## `wd set-window-size <width> <height>`
+
+## `wd maximize`
+
+## `wd find <strategy> <selector> ...`
+
+Finds one matching element.
+
+The `<strategy>` can be one of:
+
+  - `css` (CSS selector)
+  - `xpath` (XPath selector)
+  - `id` (element ID)
+  - `name` (element name)
+  - `class` (element class name)
+  - `tag` (element tag name)
+  - `link` (element link text)
+  - `partial` (partial element link text)
+
+The `<selector>` values are concatenated for convenience.
+
+## `wd find-all <strategy> <selector>`
+
+See `wd find`; finds all matching elements.
+
+## `wd find-in <element-id> <strategy> <selector>`
+
+See `wd find`; finds one matching sub-element.
+
+(Not supported by Chrome.)
+
+## `wd find-all-in <element-id> <strategy> <selector>`
+
+See `wd find`; finds all matching sub-elements.
+
+(Not supported by Chrome.)
+
+## `wd is-selected <element-id>`
+## `wd is-enabled <element-id>`
+
+## `wd attribute <element-id> <attribute-name>`
+
+Gets an element attribute value.
+
+## `wd css-value <element-id> <css-property-name>`
+
+Gets an element CSS property value.
+
+## `wd text <element-id>`
+
+Gets an element's `innerText`.
+
+## `wd tag-name <element-id>`
+
+Gets the tag name of an element.
+
+## `wd click <element-id>`
+
+Clicks an element.
+
+## `wd clear <element-id>`
+
+Clears the value, checkedness, or text content of an element.
+
+## `wd send-keys <element-id> [keys] ...`
+
+Sends keys to an element.
+
+Key arguments are concatenated for convenience.
+
+## `wd execute <body> [argument] ...`
+
+Evaluates the JavaScript code `<body>` as a function called with the
+given arguments.
+
+Prints the return value of the specified function.
+
+## `wd execute-async <body> [argument] ...`
+
+Evaluates as in `wd execute` but waiting for the script to invoke a callback
+which is passed as an additional final argument to the specified function.
+
+Prints the value finally passed to the callback.
+
+## `wd cookies`
+
+Prints the currently set cookies as a JSON array.
+
+## `wd cookie <name>`
+
+Prints the cookie named `<name>` as JSON.
+
+## `wd add-cookie <key> <value> <key> <value> ...`
+
+Adds a cookie according to the given keys/values.
+
+Example: `wd add-cookie name '"user"' value '"mbrock"'`
+
+## `wd delete-cookie <name>`
+
+Deletes the cookie whose name is `<name>`.
+
+## `wd delete-cookies`
+
+Deletes all cookies.
+
+## `wd screenshot`
+
+Prints a binary PNG screenshot to stdout.
+
+## `wd element-screenshot <element-id>`
+
+Prints a binary PNG screenshot of a specific element to stdout.
+
+(Not supported by Chrome.)
+
+.
+    ;;
+    *)
+      cat >&2 <<.
+Usage: wd <command> [arguments]
+Help:  wd help
+.
+      exit 1
+      ;;
+  esac
+}
+
+die() {
+  rc=$1; shift; echo "$0:" "$@" >&2; exit $rc
+}
+
+json-obj() {
+  perl -mJSON::PP -e '
+    use List::Util qw(pairmap);
+    $j = JSON::PP->new->allow_nonref;
+    print "{", join(",", pairmap { $j->encode($a) .":". $b } @ARGV), "}"
+  ' "$@"
+}
+json-arr() {
+  perl -e '
+    print "[", join(",", @ARGV), "]"
+  ' "$@"
+}
+json-str() {
+  perl -MJSON::PP -e 'print JSON::PP->new->allow_nonref->encode($ARGV[0])' "$1"
+}
+decode-base64() {
+  perl -MMIME::Base64 -e 'print decode_base64(<STDIN>)'
+}
+
+wd-post() {
+  if [[ $# -eq 2 ]]; then
+    curl -sSL -H "Content-Type: application/json" --data-raw "$2" \
+      "$WEBDRIVER_URL""$1"
+  elif [[ $# -eq 1 ]]; then
+    curl -sSL -XPOST "$WEBDRIVER_URL""$1"
+  else
+    die 127 internal error
+  fi
+}
+
+wd-new-session() {
+  local capabilities
+  if [[ -n "$WEBDRIVER_CAPABILITIES" ]]; then
+    capabilities="$WEBDRIVER_CAPABILITIES"
+  elif [[ -n "$WEBDRIVER_BROWSER" ]]; then
+    capabilities="$(json-obj browserName "$(json-str "$WEBDRIVER_BROWSER")")"
+  else
+    die 1 "neither WEBDRIVER_CAPABILITIES nor WEBDRIVER_BROWSER set"
+  fi
+  wd-post /session "$(json-obj desiredCapabilities "$capabilities")" |
+    jq -r -e .sessionId
+}
+
+wd-assert-session() {
+  if [[ -z "$WEBDRIVER_SESSION" ]]; then
+    die 1 WEBDRIVER_SESSION not defined
+  fi
+}
+
+wd-delete-session() {
+  wd-assert-session
+  curl -sSL -XDELETE "$WEBDRIVER_URL"/session/"$WEBDRIVER_SESSION""$1"
+}
+
+wd-post-session-checked() {
+  result="$(wd-post-session "$@")"
+  status="$(jq .status <<<"$result")"
+  if [[ $status -ne 0 ]]; then
+    die 1 $'POST error\n\n' "$(jq .value <<<"$result")"
+  else
+    jq .value <<<"$result"
+  fi
+}
+
+wd-get-session-checked() {
+  result="$(wd-get-session "$@")"
+  status="$(jq .status <<<"$result")"
+  if [[ $status -ne 0 ]]; then
+    die 1 $'GET error\n\n' "$(jq .value <<<"$result")"
+  else
+    jq .value <<<"$result"
+  fi
+}
+
+wd-post-session() {
+  wd-assert-session
+  url=$1; shift
+  result="$(wd-post /session/"$WEBDRIVER_SESSION""$url" "$@")"
+  status="$(jq .status <<<"$result")"
+  if [[ $status -ne 0 ]]; then
+    die 1 $'POST error\n\n' "$(jq -r .value.message <<<"$result")"
+  else
+    echo $result
+  fi
+}
+
+wd-get-session() {
+  wd-assert-session
+  curl -sSL "$WEBDRIVER_URL""$1"/session/"$WEBDRIVER_SESSION""$1"
+}
+
+wd-go() {
+  wd-post-session /url "$(json-obj url "$(json-str "$1")")"
+}
+
+wd-get-current-url() { wd-get-session /url | jq -r .value; }
+wd-get-title() { wd-get-session /title | jq -r .value; }
+wd-get-window-handle() { wd-get-session /window | jq -r .value; }
+
+wd-close-window() { wd-delete-session /window; }
+
+wd-switch-to-window() {
+  wd-post-session /window "$(json-obj handle "$(json-str "$1")")"
+}
+
+wd-get-window-handles() {
+  wd-get-session /window/handles | jq -r '.value | .[]'
+}
+
+wd-switch-to-frame() {
+  local id
+  case $1 in
+    +([0-9]) ) id=$1 ;;
+    * ) id="$(json-str "$1")" ;;
+  esac
+  wd-post-session /frame "$(json-obj id "$id")"
+}
+
+wd-get-window-size() {
+  wd-get-session /window/size | jq -r '.value.width, .value.height' |
+    sed 'N;s/\n/ /'
+}
+
+wd-set-window-size() {
+  wd-post-session /window/size "$(json-obj width "$1" height "$2")"
+}
+
+wd-maximize() {
+  wd-post-session /window/maximize >/dev/null
+}
+
+wd-parse-strategy() {
+  case $1 in
+    id) json-str "id" ;;
+    name) json-str "name" ;;
+    class*) json-str "class name" ;;
+    tag*) json-str "tag name" ;;
+    css*) json-str "css selector" ;;
+    link*) json-str "link text" ;;
+    partial*) json-str "partial link text" ;;
+    xpath*) json-str xpath ;;
+    *) die 1 unknown element location strategy: "$1"
+  esac
+}
+
+wd-find-element() {
+  local strategy="$(wd-parse-strategy "$1")"
+  shift
+  local value="$(json-str "$*")"
+  wd-post-session /element \
+    "$(json-obj using "$strategy" value "$value")" |
+    jq -r '.value | .[]'
+}
+
+wd-find-elements() {
+  local strategy="$(wd-parse-strategy "$1")"
+  shift
+  local value="$(json-str "$*")"
+  wd-post-session /elements \
+    "$(json-obj using "$strategy" value "$value")" |
+    jq -r '.value | map(.[]) | .[]'
+}
+
+wd-find-element-from-element() {
+  local element=$1; shift
+  local strategy="$(wd-parse-strategy "$1")"; shift
+  local value="$(json-str "$*")"
+  wd-post-session /element/"$element"/element \
+    "$(json-obj using "$strategy" value "$value")" |
+    jq -r '.value | .[]'
+}
+
+wd-find-elements-from-element() {
+  local element=$1; shift
+  local strategy="$(wd-parse-strategy "$1")"; shift
+  local value="$(json-str "$*")"
+  wd-post-session /element/"$element"/elements \
+    "$(json-obj using "$strategy" value "$value")" |
+    jq -r '.value | map(.[]) | .[]'
+}
+
+wd-is-element-selected() {
+  wd-get-session-checked /element/"$1"/selected
+}
+
+wd-get-element-attribute() {
+  local value
+  value=$(wd-get-session-checked /element/"$1"/attribute/"$2" | jq -r -e .)
+  [[ $? -eq 0 ]] || die 1 "attribute not found"
+  echo "$value"
+}
+
+wd-get-element-css-value() {
+  local value
+  value=$(wd-get-session-checked /element/"$1"/css/"$2" | jq -r -e .)
+  [[ $? -eq 0 ]] || die 1 "CSS property not found"
+  echo "$value"
+}
+
+wd-get-element-text() {
+  wd-get-session-checked /element/"$1"/text | jq -r -e .
+}
+
+wd-get-element-tag-name() {
+  wd-get-session-checked /element/"$1"/name | jq -r -e .
+}
+
+wd-is-element-enabled() {
+  wd-get-session-checked /element/"$1"/enabled | jq -r -e .
+}
+
+wd-element-simple-action() {
+  wd-post-session /element/"$1"/"$2" | jq -r -e . >/dev/null
+}
+
+wd-element-click() { wd-element-simple-action "$1" click; }
+wd-element-clear() { wd-element-simple-action "$1" clear; }
+
+wd-element-send-keys() {
+  wd-element-simple-action "$1" value "$(json-obj text "$(json-str "$*")")"
+}
+
+wd-get-page-source() {
+  wd-get-session-checked /source | jq -r .
+}
+
+wd-execute-script-sync() {
+  local script="$1"; shift
+  wd-post-session /execute/sync "$(json-obj \
+    script "$(json-str "$script")" \
+    args "$(json-arr "$@")" \
+  )" | jq .value
+}
+
+wd-execute-script-async() {
+  local script="$1"; shift
+  wd-post-session /execute/async "$(json-obj \
+    script "$(json-str "$script")" \
+    args "$(json-arr "$@")" \
+  )" | jq .value
+}
+
+wd-get-all-cookies() {
+  wd-get-session-checked /cookie
+}
+
+wd-get-named-cookie() {
+  wd-get-session-checked /cookie/"$1"
+}
+
+wd-add-cookie() {
+  wd-post-session /cookie "$(json-obj cookie "$(json-obj "$@")")"
+}
+
+wd-delete-cookie() { wd-delete-session /cookie/"$1"; }
+wd-delete-cookies() { wd-delete-session /cookie; }
+
+wd-take-screenshot() {
+  wd-get-session-checked /screenshot | jq -r . |
+  decode-base64
+}
+
+wd-take-element-screenshot() {
+  wd-get-session-checked /element/"$1"/screenshot | jq -r . |
+  decode-base64
+}
+
+main "$@"
