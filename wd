@@ -161,8 +161,9 @@ json-str() {
 
 json-get() {
   perl -mJSON::PP -e '
+    local $/; my $s = <STDIN> || exit 1;
     my $j = JSON::PP->new->allow_nonref;
-    my $data = $j->decode(<STDIN>);
+    my $data = $j->decode($s);
     my $x = $data;
     foreach (@ARGV) {
       if (ref($x) eq "ARRAY") {
@@ -179,6 +180,7 @@ json-get() {
 
 json-raw() {
   perl -mJSON::PP -e '
+    local $/; my $s = <STDIN> || exit 1;
     my $j = JSON::PP->new->allow_nonref;
     sub flat {
       my $x = shift;
@@ -190,7 +192,7 @@ json-raw() {
         print $x, "\n";
       }
     }
-    flat $j->decode(<STDIN>);
+    flat $j->decode($s);
   ' "$@"
 }
 
@@ -250,7 +252,7 @@ wd-checked-result() {
   local result="$(cat)"
   status="$(json-get status <<<"$result")"
   if [[ $status -ne 0 ]]; then
-    die 1 "$(json-get value <<<"$result")"
+    die 1 "$(json-get-raw value message <<<"$result")"
   else
     json-get value <<<"$result"
   fi
@@ -338,7 +340,10 @@ wd-parse-strategy() {
 
 wd-general-element-find() {
   local path="$1"; shift
-  local strategy="$(wd-parse-strategy "$1")"; shift
+  local strategy
+  strategy="$(wd-parse-strategy "$1")"
+  [[ $? -eq 0 ]] || exit $?
+  shift
   local value="$(json-str "$*")"
   wd-post-session "$path" "$(json-obj using "$strategy" value "$value")" |
     json-raw
@@ -377,7 +382,7 @@ wd-get-element-tag-name() { wd-get-element-value "$1" name; }
 wd-is-element-enabled() { wd-get-element-value "$1" enabled; }
 
 wd-element-simple-action() {
-  wd-post-session /element/"$1"/"$2"
+  hush wd-post-session /element/"$1"/"$2"
 }
 
 wd-element-click() { wd-element-simple-action "$1" click; }
