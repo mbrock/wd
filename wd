@@ -456,7 +456,7 @@ for details about the protocol and behavior.
     $ export WEBDRIVER_SESSION="$(wd new-session)"
     $ wd go https://github.com/mbrock/wd
     $ wd screenshot > /tmp/wd.png
-    $ wd click "$(wd find css '.user-mention')"
+    $ wd click "$(wd find css .user-mention)"
     $ wd exec 'return document.title'
 
 ## Configuration
@@ -523,21 +523,21 @@ The `<strategy>` can be one of:
 
 The `<selector>` values are concatenated for convenience.
 
-#### `wd find-all <strategy> <selector>`
+Example:
+
+    $ wd find css article header img.avatar
+
+#### `wd find-all <strategy> <selector> ...`
 
 See `wd find`; finds all matching elements.
 
-#### `wd find-in <element-id> <strategy> <selector>`
+#### `wd find-in <element-id> <strategy> <selector> ...`
 
 See `wd find`; finds one matching sub-element.
 
-(Not supported by Chrome.)
-
-#### `wd find-all-in <element-id> <strategy> <selector>`
+#### `wd find-all-in <element-id> <strategy> <selector> ...`
 
 See `wd find`; finds all matching sub-elements.
-
-(Not supported by Chrome.)
 
 ### Element information
 
