@@ -78,7 +78,7 @@ Refreshes the page of the current window.
 
 #### `wd find <strategy> <selector> ...`
 
-Finds one matching element.
+Finds one matching element and prints its element ID.
 
 The `<strategy>` can be one of:
 
