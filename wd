@@ -1,9 +1,7 @@
 #!/usr/bin/env bash
 # wd -- the WebDriver command line interface
 #
-# Copyright 2016 Mikael Brockman
-#
-# Maintainer: <mikael@brockman.se>
+# Copyright 2016 Mikael Brockman <mikael@brockman.se>
 #
 # MIT license:
 #
@@ -28,7 +26,7 @@
 
 set -o pipefail
 
-shopt -s extglob # for extended case patterns
+shopt -s extglob # extended case patterns
 
 main() {
   : ${WEBDRIVER_URL:=http://0:4444/wd/hub}
@@ -158,12 +156,60 @@ json-arr() {
 }
 
 json-str() {
-  perl -MJSON::PP -e 'print JSON::PP->new->allow_nonref->encode($ARGV[0])' "$1"
+  perl -mJSON::PP -e 'print JSON::PP->new->allow_nonref->encode($ARGV[0])' "$1"
 }
+
+json-get() {
+  perl -mJSON::PP -e '
+    my $j = JSON::PP->new->allow_nonref;
+    my $data = $j->decode(<STDIN>);
+    my $x = $data;
+    foreach (@ARGV) {
+      if (ref($x) eq "ARRAY") {
+        # convert array to k=>v hash
+        my %h = map { $_ => $x->[$_] } 0..$#$x;
+        $x = \%h;
+      }
+      exists $x->{$_} or die "invalid JSON index";
+      $x = $x->{$_};
+    }
+    print $j->encode($x), "\n";
+  ' "$@"
+}
+
+json-raw() {
+  perl -mJSON::PP -e '
+    my $j = JSON::PP->new->allow_nonref;
+    sub flat {
+      my $x = shift;
+      if (ref($x) eq "ARRAY") {
+        flat($_) foreach @$x;
+      } elsif (ref($x) eq "HASH") {
+        flat($_) foreach values %$x;
+      } else {
+        print $x, "\n";
+      }
+    }
+    flat $j->decode(<STDIN>);
+  ' "$@"
+}
+
+json-raw-nonnull() {
+  local x=$(cat)
+  case $x in
+    null) false ;;
+    *) json-raw <<<"$x" ;;
+  esac
+}
+
+json-get-raw() { json-get "$@" | json-raw; }
+json-get-raw-nonnull() { json-get "$@" | json-raw-nonnull; }
 
 decode-base64() {
   perl -MMIME::Base64 -e 'print decode_base64(<STDIN>)'
 }
+
+hush() { "$@" >/dev/null; }
 
 wd-post() {
   if [[ $# -eq 2 ]]; then
@@ -186,7 +232,7 @@ wd-new-session() {
     die 1 "neither WEBDRIVER_CAPABILITIES nor WEBDRIVER_BROWSER set"
   fi
   wd-post /session "$(json-obj desiredCapabilities "$capabilities")" |
-    jq -r -e .sessionId
+    json-get-raw sessionId
 }
 
 wd-assert-session() {
@@ -197,8 +243,29 @@ wd-assert-session() {
 
 wd-get-session() {
   wd-assert-session
-  curl -sSL "$WEBDRIVER_URL""$1"/session/"$WEBDRIVER_SESSION""$1"
+  curl -sSL "$WEBDRIVER_URL"/session/"$WEBDRIVER_SESSION""$1"
 }
+
+wd-checked-result() {
+  local result="$(cat)"
+  status="$(json-get status <<<"$result")"
+  if [[ $status -ne 0 ]]; then
+    die 1 "$(json-get value <<<"$result")"
+  else
+    json-get value <<<"$result"
+  fi
+}
+
+wd-post-session-value()    { wd-post-session "$@" | wd-checked-result; }
+wd-get-session-simple()    { wd-get-session "$@" | json-get-raw-nonnull value; }
+wd-get-session-value()     { wd-get-session "$@"  | wd-checked-result; }
+wd-get-session-value-raw() { wd-get-session-value "$@" | json-raw-nonnull; }
+wd-get-element-value()     { wd-get-session-value-raw /element/"$1"/"$2"; }
+
+wd-get-current-url()   { wd-get-session-simple /url; }
+wd-get-title()         { wd-get-session-simple /title; }
+wd-get-window-handle() { wd-get-session-simple /window; }
+wd-get-page-source()   { wd-get-session-value /source | json-raw; }
 
 wd-delete-session() {
   wd-assert-session
@@ -208,61 +275,23 @@ wd-delete-session() {
 wd-post-session() {
   wd-assert-session
   url=$1; shift
-  result="$(wd-post /session/"$WEBDRIVER_SESSION""$url" "$@")"
-  status="$(jq .status <<<"$result")"
-  if [[ $status -ne 0 ]]; then
-    die 1 $'POST error\n\n' "$(jq -r .value.message <<<"$result")"
-  else
-    echo $result
-  fi
-}
-
-wd-post-session-checked() {
-  result="$(wd-post-session "$@")"
-  status="$(jq .status <<<"$result")"
-  if [[ $status -ne 0 ]]; then
-    die 1 $'POST error\n\n' "$(jq .value <<<"$result")"
-  else
-    jq .value <<<"$result"
-  fi
-}
-
-wd-get-session-checked() {
-  result="$(wd-get-session "$@")"
-  status="$(jq .status <<<"$result")"
-  if [[ $status -ne 0 ]]; then
-    die 1 $'GET error\n\n' "$(jq .value <<<"$result")"
-  else
-    jq .value <<<"$result"
-  fi
+  wd-post /session/"$WEBDRIVER_SESSION""$url" "$@" | wd-checked-result
 }
 
 wd-go() {
-  wd-post-session /url "$(json-obj url "$(json-str "$1")")" >/dev/null
-}
-
-wd-get-current-url() {
-  wd-get-session /url | jq -r .value
-}
-
-wd-get-title() {
-  wd-get-session /title | jq -r .value
-}
-
-wd-get-window-handle() {
-  wd-get-session /window | jq -r .value
+  hush wd-post-session /url "$(json-obj url "$(json-str "$1")")"
 }
 
 wd-close-window() {
-  wd-delete-session /window
+  hush wd-delete-session /window
 }
 
 wd-switch-to-window() {
-  wd-post-session /window "$(json-obj handle "$(json-str "$1")")" >/dev/null
+  hush wd-post-session /window "$(json-obj handle "$(json-str "$1")")"
 }
 
 wd-get-window-handles() {
-  wd-get-session /window/handles | jq -r '.value | .[]'
+  wd-get-session /window/handles | json-get-raw value
 }
 
 wd-switch-to-frame() {
@@ -271,24 +300,26 @@ wd-switch-to-frame() {
     +([0-9]) ) id=$1 ;;
     * ) id="$(json-str "$1")" ;;
   esac
-  wd-post-session /frame "$(json-obj id "$id")" >/dev/null
+  hush wd-post-session /frame "$(json-obj id "$id")"
 }
 
 wd-switch-to-top-level-frame() {
-  wd-post-session frame "$(json-obj id null)" >/dev/null
+  hush wd-post-session frame "$(json-obj id null)"
 }
 
 wd-get-window-size() {
-  wd-get-session /window/size | jq -r '.value.width, .value.height' |
-    sed 'N;s/\n/ /'
+  local result
+  result=$(wd-get-session /window/size)
+  echo "$result" | json-get-raw value width
+  echo "$result" | json-get-raw value height
 }
 
 wd-set-window-size() {
-  wd-post-session /window/size "$(json-obj width "$1" height "$2")" >/dev/null
+  hush wd-post-session /window/size "$(json-obj width "$1" height "$2")"
 }
 
 wd-maximize() {
-  wd-post-session /window/maximize >/dev/null
+  hush wd-post-session /window/maximize
 }
 
 wd-parse-strategy() {
@@ -305,88 +336,55 @@ wd-parse-strategy() {
   esac
 }
 
-wd-find-element() {
+wd-general-element-find() {
+  local path="$1"; shift
   local strategy="$(wd-parse-strategy "$1")"; shift
   local value="$(json-str "$*")"
-  wd-post-session /element \
-    "$(json-obj using "$strategy" value "$value")" |
-    jq -r '.value | .[]'
+  wd-post-session "$path" "$(json-obj using "$strategy" value "$value")" |
+    json-raw
 }
 
-wd-find-elements() {
-  local strategy="$(wd-parse-strategy "$1")"; shift
-  local value="$(json-str "$*")"
-  wd-post-session /elements \
-    "$(json-obj using "$strategy" value "$value")" |
-    jq -r '.value | map(.[]) | .[]'
-}
+wd-find-element()  { wd-general-element-find /element "$@"; }
+wd-find-elements() { wd-general-element-find /elements "$@"; }
 
 wd-find-element-from-element() {
   local element=$1; shift
-  local strategy="$(wd-parse-strategy "$1")"; shift
-  local value="$(json-str "$*")"
-  wd-post-session /element/"$element"/element \
-    "$(json-obj using "$strategy" value "$value")" |
-    jq -r '.value | .[]'
+  wd-general-element-find /element/"$element"/element "$@"
 }
 
 wd-find-elements-from-element() {
   local element=$1; shift
-  local strategy="$(wd-parse-strategy "$1")"; shift
-  local value="$(json-str "$*")"
-  wd-post-session /element/"$element"/elements \
-    "$(json-obj using "$strategy" value "$value")" |
-    jq -r '.value | map(.[]) | .[]'
-}
-
-wd-is-element-selected() {
-  wd-get-session-checked /element/"$1"/selected
+  wd-general-element-find /element/"$element"/elements "$@"
 }
 
 wd-get-element-attribute() {
-  local value
-  value=$(wd-get-session-checked /element/"$1"/attribute/"$2" | jq -r -e .)
+  local x
+  x=$(wd-get-session-value-raw /element/"$1"/attribute/"$2")
   [[ $? -eq 0 ]] || die 1 "attribute not found"
-  echo "$value"
+  echo "$x"
 }
 
 wd-get-element-css-value() {
-  local value
-  value=$(wd-get-session-checked /element/"$1"/css/"$2" | jq -r -e .)
+  local x
+  x=$(wd-get-session-value-raw /element/"$1"/css/"$2")
   [[ $? -eq 0 ]] || die 1 "CSS property not found"
-  echo "$value"
+  echo "$x"
 }
 
-wd-get-element-text() {
-  wd-get-session-checked /element/"$1"/text | jq -r -e .
-}
-
-wd-get-element-tag-name() {
-  wd-get-session-checked /element/"$1"/name | jq -r -e .
-}
-
-wd-is-element-enabled() {
-  wd-get-session-checked /element/"$1"/enabled | jq -r -e .
-}
+wd-is-element-selected() { wd-get-element-value "$1" selected; }
+wd-get-element-text() { wd-get-element-value "$1" text; }
+wd-get-element-tag-name() { wd-get-element-value "$1" name; }
+wd-is-element-enabled() { wd-get-element-value "$1" enabled; }
 
 wd-element-simple-action() {
-  wd-post-session /element/"$1"/"$2" | jq -r -e . >/dev/null
+  wd-post-session /element/"$1"/"$2"
 }
 
-wd-element-click() {
-  wd-element-simple-action "$1" click
-}
-
-wd-element-clear() {
-  wd-element-simple-action "$1" clear
-}
+wd-element-click() { wd-element-simple-action "$1" click; }
+wd-element-clear() { wd-element-simple-action "$1" clear; }
 
 wd-element-send-keys() {
   wd-element-simple-action "$1" value "$(json-obj text "$(json-str "$*")")"
-}
-
-wd-get-page-source() {
-  wd-get-session-checked /source | jq -r .
 }
 
 wd-execute-script-sync() {
@@ -394,7 +392,7 @@ wd-execute-script-sync() {
   wd-post-session /execute/sync "$(json-obj \
     script "$(json-str "$script")" \
     args "$(json-arr "$@")" \
-  )" | jq .value
+  )"
 }
 
 wd-execute-script-async() {
@@ -402,32 +400,25 @@ wd-execute-script-async() {
   wd-post-session /execute/async "$(json-obj \
     script "$(json-str "$script")" \
     args "$(json-arr "$@")" \
-  )" | jq .value
+  )"
 }
 
-wd-get-all-cookies() {
-  wd-get-session-checked /cookie
-}
-
-wd-get-named-cookie() {
-  wd-get-session-checked /cookie/"$1"
-}
+wd-get-all-cookies() { wd-get-session-value /cookie; }
+wd-get-named-cookie() { wd-get-session-value /cookie/"$1"; }
 
 wd-add-cookie() {
-  wd-post-session /cookie "$(json-obj cookie "$(json-obj "$@")")" >/dev/null
+  hush wd-post-session /cookie "$(json-obj cookie "$(json-obj "$@")")"
 }
 
 wd-delete-cookie() { wd-delete-session /cookie/"$1"; }
 wd-delete-cookies() { wd-delete-session /cookie; }
 
 wd-take-screenshot() {
-  wd-get-session-checked /screenshot | jq -r . |
-  decode-base64
+  wd-get-session-value /screenshot | json-raw | decode-base64
 }
 
 wd-take-element-screenshot() {
-  wd-get-session-checked /element/"$1"/screenshot | jq -r . |
-  decode-base64
+  wd-get-session-value /element/"$1"/screenshot | json-raw | decode-base64
 }
 
 print-help() {
@@ -447,7 +438,6 @@ for details.
 
   - `bash`
   - `perl` with `JSON::PP` (included since Perl 5.14)
-  - [`jq`](https://github.com/stedolan/jq) (would like to replace with Perl)
   - `curl`
 
 ## Example session
