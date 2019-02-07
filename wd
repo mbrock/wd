@@ -155,6 +155,20 @@ json-arr() {
   ' "$@"
 }
 
+json-keyarr() {
+  perl -mJSON::PP -e '
+    print
+      "[",
+      (join ",\" \",",
+        map {
+          join ",",
+            map { JSON::PP->new->allow_nonref->encode($_) }
+              split(//, $_)
+        } @ARGV),
+     "]"
+  ' "$@"
+}
+
 json-str() {
   perl -mJSON::PP -e 'print JSON::PP->new->allow_nonref->encode($ARGV[0])' "$1"
 }
@@ -386,16 +400,19 @@ wd-is-element-enabled() { [[ 1 -eq $(wd-get-element-value "$1" enabled) ]]; }
 wd-is-element-selected() { [[ 1 -eq $(wd-get-element-value "$1" selected) ]]; }
 
 wd-element-simple-action() {
-  hush wd-post-session /element/"$1"/"$2"
+  local x y
+  x=$1; shift; y=$1; shift
+  hush wd-post-session /element/"$x"/"$y" "$@"
 }
 
 wd-element-click() { wd-element-simple-action "$1" click; }
 wd-element-clear() { wd-element-simple-action "$1" clear; }
 
 wd-element-send-keys() {
-  local element
+  local element keys
   element=$1; shift
-  wd-element-simple-action "$element" value "$(json-obj value "$(json-str "$*")")"
+  keys=$(json-keyarr "$*")
+  wd-element-simple-action "$element" value "$(json-obj value "$keys")"
 }
 
 wd-execute-script-sync() {
