@@ -213,6 +213,10 @@ Prints the window handle of the current window.
 
 Prints a list of all window handles in the current session.
 
+#### `wd close-window`
+
+Close the current window.
+
 #### `wd switch-to-window <window-handle>`
 
 Changes which window is the current window.

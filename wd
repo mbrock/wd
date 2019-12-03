@@ -59,6 +59,9 @@ main() {
     get-window-handles)
       wd-get-window-handles ;;
 
+    close-window)
+      wd-close-window ;;
+
     switch-to-window)
       wd-switch-to-window "$@" ;;
     switch-to-frame)
