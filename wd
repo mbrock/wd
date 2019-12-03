@@ -251,7 +251,7 @@ wd-new-session() {
   else
     die 1 "neither WEBDRIVER_CAPABILITIES nor WEBDRIVER_BROWSER set"
   fi
-  wd-post /session "$(json-obj desiredCapabilities "$capabilities")" |
+  wd-post /session "$(json-obj capabilities "$capabilities")" |
     json-get-raw-nonnull sessionId
 }
 
