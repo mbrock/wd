@@ -4,7 +4,7 @@ let deps = [pkgs.perl pkgs.curl]; in
 
 stdenv.mkDerivation rec {
   name = "wd-${version}";
-  version = "0.10";
+  version = "0.11";
   meta = {
     description = "Command-line tool for WebDriver API";
     homepage = https://github.com/mbrock/wd;
