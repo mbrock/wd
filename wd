@@ -25,6 +25,7 @@
 # WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 set -o pipefail
+#set -x
 
 shopt -s extglob # extended case patterns
 
@@ -269,12 +270,7 @@ wd-get-session() {
 wd-checked-result() {
   local result
   result=$(cat)
-  status="$(json-get status <<<"$result")"
-  if [[ $status -ne 0 ]]; then
-    die 1 "$(json-get-raw value message <<<"$result")"
-  else
-    json-get value <<<"$result"
-  fi
+  json-get value <<<"$result"
 }
 
 wd-post-session-value()    { wd-post-session "$@" | wd-checked-result; }
@@ -414,8 +410,8 @@ wd-element-clear() { wd-element-simple-action "$1" clear; }
 wd-element-send-keys() {
   local element keys
   element=$1; shift
-  keys=$(json-keyarr "$*")
-  wd-element-simple-action "$element" value "$(json-obj value "$keys")"
+  # keys=$(json-keyarr "$*")
+  wd-element-simple-action "$element" value "$(json-obj text "$(json-str "$*")")"
 }
 
 wd-execute-script-sync() {
